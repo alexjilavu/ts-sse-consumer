@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SSE Demo</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+    }
+
+    input,
+    button {
+      margin: 5px;
+      padding: 8px;
+    }
+
+    #events {
+      border: 1px solid #ccc;
+      height: 400px;
+      overflow-y: scroll;
+      padding: 10px;
+      margin-top: 10px;
+    }
+
+    .event {
+      margin-bottom: 10px;
+      padding: 5px;
+      border-left: 3px solid #007bff;
+      background: #f9f9f9;
+    }
+
+    .status {
+      margin: 10px 0;
+      padding: 5px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>SSE Demo</h1>
+
+  <div>
+    <input type="text" id="apiKey" placeholder="API Key" />
+    <input type="text" id="serverUrl" placeholder="Server URL" value="https://real-time.sui-nft-api.buidly.com/events" />
+    <input type="text" id="lastId" placeholder="Last ID (optional)" />
+    <button onclick="connect()">Connect</button>
+    <button onclick="disconnect()">Disconnect</button>
+    <button onclick="clearEvents()">Clear</button>
+  </div>
+
+  <div id="status" class="status">Disconnected</div>
+  <div>Events: <span id="count">0</span></div>
+  <div id="events"></div>
+
+  <script>
+    let eventSource = null;
+    let eventCount = 0;
+
+    function connect() {
+      const apiKey = document.getElementById('apiKey').value;
+      const serverUrl = document.getElementById('serverUrl').value;
+      const lastId = document.getElementById('lastId').value;
+
+      if (!apiKey) {
+        alert('Please enter an API key');
+        return;
+      }
+
+      disconnect();
+      clearEvents();
+
+      let url = `${serverUrl}/${apiKey}`;
+      if (lastId) {
+        url += `?lastId=${encodeURIComponent(lastId)}`;
+      }
+      document.getElementById('status').textContent = 'Connecting...';
+
+      eventSource = new EventSource(url, {
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+        },
+      });
+
+      eventSource.onopen = function () {
+        document.getElementById('status').textContent = 'Connected';
+      };
+
+      eventSource.onmessage = function (event) {
+        console.log('Received event', event);
+
+        const jsonData = JSON.parse(event.data);
+
+        eventCount++;
+        document.getElementById('count').textContent = eventCount;
+
+        const eventDiv = document.createElement('div');
+        eventDiv.className = 'event';
+        eventDiv.innerHTML = `
+        <strong>${new Date(jsonData?.timestamp_ms).toLocaleString()} - ${event.lastEventId}</strong>: <br />
+        ${event.data}
+      `;
+
+        document.getElementById('events').insertBefore(eventDiv, document.getElementById('events').firstChild);
+      };
+
+      eventSource.onerror = function () {
+        document.getElementById('status').textContent = 'Error/Disconnected';
+      };
+    }
+
+    function disconnect() {
+      if (eventSource) {
+        eventSource.close();
+        eventSource = null;
+        document.getElementById('status').textContent = 'Disconnected';
+      }
+    }
+
+    function clearEvents() {
+      document.getElementById('events').innerHTML = '';
+      eventCount = 0;
+      document.getElementById('count').textContent = eventCount;
+    }
+  </script>
+</body>
+
+</html>

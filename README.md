@@ -1,6 +1,6 @@
 # Simple SSE Reader
 
-A minimal TypeScript project that connects to server-sent events and logs them.
+A minimal TypeScript project that connects to server-sent events and logs them. This project supports both Node.js and browser environments.
 
 ## Setup
 
@@ -9,11 +9,50 @@ A minimal TypeScript project that connects to server-sent events and logs them.
 npm install
 ```
 
-2. Run:
+## Usage
+
+### Node.js Environment
+
+Run the TypeScript SSE consumer in Node.js:
+
 ```bash
-npm run dev
+npm run start:node
 ```
 
-That's it! The app will connect to the SSE endpoint and log each event to the console.
+This will:
+- Connect to the SSE endpoint defined in `src/index.ts`
+- Log each event to the console
+- Handle connection status and errors
+- Gracefully close on `Ctrl+C`
 
-Press `Ctrl+C` to stop.
+**Configuration**: Edit the `SSE_URL` variable in `src/index.ts` to point to your SSE endpoint.
+
+### Browser Environment
+
+Run the browser-based SSE demo:
+
+```bash
+npm run start:browser
+```
+
+Then open your browser and navigate to:
+```
+http://localhost:8080
+```
+
+This will:
+- Serve the interactive HTML demo at `src/index.html`
+- Provide a web interface to configure API key, server URL, and last ID
+- Display events in real-time with timestamps
+- Show connection status and event count
+- Allow you to connect/disconnect and clear events
+
+## Project Structure
+
+- `src/index.ts` - Node.js SSE consumer
+- `src/index.html` - Browser-based SSE demo interface
+- `package.json` - Dependencies and scripts
+
+## Dependencies
+
+- `eventsource` - SSE client library
