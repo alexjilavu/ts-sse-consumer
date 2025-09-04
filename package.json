@@ -1,0 +1,17 @@
+{
+    "name": "sse-reader",
+    "version": "1.0.0",
+    "description": "Simple SSE reader",
+    "scripts": {
+      "dev": "ts-node src/index.ts"
+    },
+    "dependencies": {
+      "eventsource": "^2.0.2"
+    },
+    "devDependencies": {
+      "@types/eventsource": "^1.1.15",
+      "@types/node": "^20.0.0",
+      "ts-node": "^10.9.0",
+      "typescript": "^5.0.0"
+    }
+  }
