@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+    }
+
+    button {
+      margin: 5px;
+      padding: 8px;
+    }
+
+    #events {
+      border: 1px solid #ccc;
+      height: 400px;
+      overflow-y: scroll;
+      padding: 10px;
+      margin-top: 10px;
+    }
+
+    .event {
+      margin-bottom: 10px;
+      padding: 5px;
+      border-left: 3px solid #28a745;
+      background: #f9f9f9;
+    }
+
+    .status {
+      margin: 10px 0;
+      padding: 5px;
+      font-weight: bold;
+    }
+
+    /* Trades table */
+    table.trades {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 16px;
+    }
+
+    table.trades th,
+    table.trades td {
+      border: 1px solid #ddd;
+      padding: 8px;
+      text-align: left;
+    }
+
+    table.trades th {
+      background: #f0f0f0;
+    }
+
+    .price-bid {
+      color: #1e8e3e; /* green */
+      font-weight: 600;
+    }
+
+    .price-ask {
+      color: #d93025; /* red */
+      font-weight: 600;
+    }
+
+    /* Row highlight for new trades */
+    .row-highlight-green {
+      background: #e7f7ec; /* light green */
+      transition: background 0.3s ease;
+    }
+
+    .row-highlight-red {
+      background: #fdeaea; /* light red */
+      transition: background 0.3s ease;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>Dashboard</h1>
+  <div>
+    <a href="./index.html">Back to Home</a>
+  </div>
+
+  <div>
+    <button id="connectBtn">Connect</button>
+    <button id="disconnectBtn">Disconnect</button>
+    <button id="clearBtn">Clear</button>
+  </div>
+
+  <div id="status" class="status">Disconnected</div>
+  <div>Events (showing last 10): <span id="count">0</span></div>
+
+  <h2>Trades</h2>
+  <table class="trades">
+    <thead>
+      <tr>
+        <th>Time</th>
+        <th>Price (USDC)</th>
+        <th>Volume (SUI)</th>
+      </tr>
+    </thead>
+    <tbody id="tradesBody"></tbody>
+  </table>
+
+  <div id="events"></div>
+
+  <script>
+    // Hardcoded SSE URL with API key
+    const SSE_URL = 'http://192.168.0.130:8000/events/db01af65-044c-4658-a99d-1377115997f4';
+
+    let eventSource = null;
+    const maxEventsToShow = 10;
+
+    function transformFillEvent(ev) {
+      const baseDecimals = 9;   // SUI
+      const quoteDecimals = 6;  // USDC
+
+      const ms = Number(ev.onchain_timestamp);
+      const time = Number.isFinite(ms) ? new Date(ms).toLocaleTimeString() : new Date().toLocaleTimeString();
+
+      const baseQty = parseFloat(ev.base_quantity);
+      const quoteQty = parseFloat(ev.quote_quantity);
+      const price = (quoteQty / baseQty) / Math.pow(10, quoteDecimals - baseDecimals);
+
+      const volume = baseQty / Math.pow(10, baseDecimals); // shown in last column
+      return { time, price: price.toFixed(4), volume };
+    }
+
+    function addTradeRow(trade, isBid) {
+      const tbody = document.getElementById('tradesBody');
+      const tr = document.createElement('tr');
+
+      const tdTime = document.createElement('td');
+      tdTime.textContent = trade.time;
+
+      const tdPrice = document.createElement('td');
+      tdPrice.textContent = trade.price;
+      tdPrice.className = isBid ? 'price-bid' : 'price-ask';
+
+      const tdVol = document.createElement('td');
+      tdVol.textContent = trade.volume;
+
+      tr.appendChild(tdTime);
+      tr.appendChild(tdPrice);
+      tr.appendChild(tdVol);
+
+      // Apply temporary highlight for 5 seconds
+      const rowHighlightClass = isBid ? 'row-highlight-green' : 'row-highlight-red';
+      tr.classList.add(rowHighlightClass);
+
+      tbody.insertBefore(tr, tbody.firstChild);
+
+      while (tbody.children.length > maxEventsToShow) {
+        tbody.removeChild(tbody.lastChild);
+      }
+
+      setTimeout(() => {
+        tr.classList.remove(rowHighlightClass);
+      }, 5000);
+    }
+
+    function connect() {
+      disconnect();
+      clearEvents();
+      document.getElementById('status').textContent = 'Connecting...';
+
+      try {
+        eventSource = new EventSource(SSE_URL);
+
+        eventSource.onopen = function () {
+          document.getElementById('status').textContent = 'Connected';
+        };
+
+        eventSource.onmessage = function (event) {
+          // Parse the incoming event JSON
+          let incoming;
+          try {
+            incoming = JSON.parse(event.data);
+          } catch (e) {
+            return; // Skip non-JSON messages
+          }
+
+          // Filter only deepbook_order_fill
+          if (!incoming || incoming.type !== 'deepbook_order_fill') {
+            return;
+          }
+
+          // Map to the specified structure
+          const modeled = {
+            type: 'deepbook_order_fill',
+            timestamp_ms: incoming.checkpoint_timestamp_ms,
+            checkpoint_id: incoming.checkpoint,
+            tx_hash: incoming.digest,
+            data: {
+              event_digest: incoming.data.event_digest,
+              sender: incoming.data.sender,
+              package: incoming.data.package,
+              pool_id: incoming.data.pool_id,
+              maker_order_id: incoming.data.maker_order_id,
+              taker_order_id: incoming.data.taker_order_id,
+              maker_client_order_id: incoming.data.maker_client_order_id,
+              taker_client_order_id: incoming.data.taker_client_order_id,
+              price: incoming.data.price,
+              taker_fee: incoming.data.taker_fee,
+              taker_fee_is_deep: incoming.data.taker_fee_is_deep,
+              maker_fee: incoming.data.maker_fee,
+              maker_fee_is_deep: incoming.data.maker_fee_is_deep,
+              taker_is_bid: incoming.data.taker_is_bid,
+              base_quantity: incoming.data.base_quantity,
+              quote_quantity: incoming.data.quote_quantity,
+              onchain_timestamp: incoming.data.onchain_timestamp
+            }
+          };
+
+          console.log("FILL EVENT", modeled);
+
+          // Derive trade row from the event payload (using data fields)
+          const tradeInput = {
+            timestamp: modeled.data.onchain_timestamp,
+            timestamp_ms: modeled.timestamp_ms,
+            base_quantity: modeled.data.base_quantity,
+            quote_quantity: modeled.data.quote_quantity
+          };
+          const trade = transformFillEvent(tradeInput);
+          addTradeRow(trade, Boolean(modeled.data.taker_is_bid));
+
+          const eventsContainer = document.getElementById('events');
+
+          const eventDiv = document.createElement('div');
+          eventDiv.className = 'event';
+          const pre = document.createElement('pre');
+          pre.textContent = JSON.stringify(modeled, null, 2);
+          eventDiv.appendChild(pre);
+
+          eventsContainer.insertBefore(eventDiv, eventsContainer.firstChild);
+
+          // Keep only the last 10 events
+          while (eventsContainer.children.length > maxEventsToShow) {
+            eventsContainer.removeChild(eventsContainer.lastChild);
+          }
+
+          // Update count to reflect displayed events only
+          document.getElementById('count').textContent = String(eventsContainer.children.length);
+        };
+
+        eventSource.onerror = function () {
+          document.getElementById('status').textContent = 'Error/Disconnected';
+        };
+      } catch (e) {
+        document.getElementById('status').textContent = 'Failed to connect';
+      }
+    }
+
+    function disconnect() {
+      if (eventSource) {
+        eventSource.close();
+        eventSource = null;
+        document.getElementById('status').textContent = 'Disconnected';
+      }
+    }
+
+    function clearEvents() {
+      const eventsContainer = document.getElementById('events');
+      eventsContainer.innerHTML = '';
+      document.getElementById('count').textContent = '0';
+    }
+
+    document.getElementById('connectBtn').addEventListener('click', connect);
+    document.getElementById('disconnectBtn').addEventListener('click', disconnect);
+    document.getElementById('clearBtn').addEventListener('click', clearEvents);
+  </script>
+</body>
+
+</html> 
